@@ -16,8 +16,6 @@ const SIZE_LIMIT_HEADING = '## size-limit report 📦 ';
 const ARTIFACT_NAME = 'size-limit-action';
 const RESULTS_FILE = 'size-limit-results.json';
 
-const artifact = new DefaultArtifactClient();
-
 async function fetchPreviousComment(octokit, repo, pr) {
   const { data: commentList } = await octokit.rest.issues.listComments({
     ...repo,
@@ -177,7 +175,7 @@ async function run() {
 
     const octokit = getOctokit(githubToken);
     const limit = new SizeLimit();
-    const artifactClient = artifact.create();
+    const artifactClient = new DefaultArtifactClient();
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
     const resultsFilePath = path.resolve(__dirname, RESULTS_FILE);
 
