@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import * as artifact from '@actions/artifact';
+import { DefaultArtifactClient } from '@actions/artifact';
 import * as core from '@actions/core';
 import { exec } from '@actions/exec';
 import { context, getOctokit } from '@actions/github';
@@ -15,6 +15,8 @@ import { markdownTable } from 'markdown-table';
 const SIZE_LIMIT_HEADING = '## size-limit report 📦 ';
 const ARTIFACT_NAME = 'size-limit-action';
 const RESULTS_FILE = 'size-limit-results.json';
+
+const artifact = new DefaultArtifactClient();
 
 async function fetchPreviousComment(octokit, repo, pr) {
   const { data: commentList } = await octokit.rest.issues.listComments({
