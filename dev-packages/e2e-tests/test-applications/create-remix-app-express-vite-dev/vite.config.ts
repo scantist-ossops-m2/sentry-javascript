@@ -15,4 +15,9 @@ export default defineConfig({
       ignoreConfigErrors: true,
     }),
   ],
+
+  // This leads to problems because it includes dependencies from parent node_modules folders
+  // which include stuff that breaks here
+  // so we just disable it for this test
+  optimizeDeps: { noDiscovery: true },
 });
