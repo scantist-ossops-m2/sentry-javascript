@@ -462,8 +462,27 @@ export function winterCGRequestToRequestData(req: WebFetchRequest): Request {
   return {
     method: req.method,
     url: req.url,
+    query_string: extractQueryParamsFromUrl(req.url),
     headers,
+    // TODO: Can we extract body data from the request?
   };
+}
+
+/** Extract the query params from an URL. */
+export function extractQueryParamsFromUrl(url: string): string | undefined {
+  // url is path and query string
+  if (!url) {
+    return;
+  }
+
+  try {
+    // The `URL` constructor can't handle internal URLs of the form `/some/path/here`, so stick a dummy protocol and
+    // hostname as the base. Since the point here is just to grab the query string, it doesn't matter what we use.
+    const queryParams = new URL(url, 'http://dogs.are.great').search.slice(1);
+    return queryParams.length ? queryParams : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function extractNormalizedRequestData(normalizedRequest: Request, { include }: { include: string[] }): Request {

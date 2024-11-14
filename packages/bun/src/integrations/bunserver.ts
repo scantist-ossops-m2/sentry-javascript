@@ -10,7 +10,7 @@ import {
   withIsolationScope,
 } from '@sentry/core';
 import type { IntegrationFn, Request, SpanAttributes } from '@sentry/types';
-import { getSanitizedUrlString, parseUrl } from '@sentry/utils';
+import { extractQueryParamsFromUrl, getSanitizedUrlString, parseUrl } from '@sentry/utils';
 
 const INTEGRATION_NAME = 'BunServer';
 
@@ -80,6 +80,7 @@ function instrumentBunServeOptions(serveOptions: Parameters<typeof Bun.serve>[0]
             url,
             method: request.method,
             headers: request.headers.toJSON(),
+            query_string: extractQueryParamsFromUrl(url),
           } satisfies Request,
         });
 
