@@ -1,3 +1,4 @@
+/* eslint-disable complexity */
 /* eslint-disable max-lines */
 // Inspired from Donnie McNeal's solution:
 // https://gist.github.com/wontondon/e8c4bdf2888875e4c755712e99279536
@@ -157,12 +158,16 @@ function sendIndexPath(pathBuilder: string, pathname: string, basename: string):
   return [formattedPath, 'route'];
 }
 
-function pathEndsWithWildcard(path: string, branch: RouteMatch<string>): boolean {
-  return (path.slice(-2) === '/*' && branch.route.children && branch.route.children.length > 0) || false;
+function pathEndsWithWildcard(path: string): boolean {
+  return path.endsWith('*');
 }
 
 function pathIsWildcardAndHasChildren(path: string, branch: RouteMatch<string>): boolean {
-  return (path === '*' && branch.route.children && branch.route.children.length > 0) || false;
+  return (pathEndsWithWildcard(path) && branch.route.children && branch.route.children.length > 0) || false;
+}
+
+function pathIsWildcardWithNoChildren(path: string, branch: RouteMatch<string>): boolean {
+  return (pathEndsWithWildcard(path) && (!branch.route.children || branch.route.children.length === 0)) || false;
 }
 
 function getNormalizedName(
@@ -170,9 +175,30 @@ function getNormalizedName(
   location: Location,
   branches: RouteMatch[],
   basename: string = '',
+  allRoutes: RouteObject[] = routes,
 ): [string, TransactionSource] {
   if (!routes || routes.length === 0) {
     return [_stripBasename ? stripBasenameFromPathname(location.pathname, basename) : location.pathname, 'url'];
+  }
+
+  const matchedRoutes = _matchRoutes(routes, location);
+
+  if (matchedRoutes) {
+    const wildCardRoutes: RouteMatch[] = matchedRoutes.filter(
+      (match: RouteMatch) => match.route.path && pathIsWildcardWithNoChildren(match.route.path, match),
+    );
+
+    for (const wildCardRoute of wildCardRoutes) {
+      const wildCardRouteMatch = _matchRoutes(allRoutes, location, wildCardRoute.pathnameBase);
+
+      if (wildCardRouteMatch) {
+        const [name, source] = getNormalizedName(wildCardRoutes, location, wildCardRouteMatch, basename, allRoutes);
+
+        if (wildCardRoute.pathnameBase && name) {
+          return [wildCardRoute.pathnameBase + name, source];
+        }
+      }
+    }
   }
 
   let pathBuilder = '';
@@ -192,20 +218,23 @@ function getNormalizedName(
           pathBuilder += newPath;
 
           // If the path matches the current location, return the path
-          if (basename + branch.pathname === location.pathname) {
+          if (
+            location.pathname.endsWith(basename + branch.pathname) ||
+            location.pathname.endsWith(`${basename}${branch.pathname}/`)
+          ) {
             if (
               // If the route defined on the element is something like
               // <Route path="/stores/:storeId/products/:productId" element={<div>Product</div>} />
               // We should check against the branch.pathname for the number of / separators
               getNumberOfUrlSegments(pathBuilder) !== getNumberOfUrlSegments(branch.pathname) &&
               // We should not count wildcard operators in the url segments calculation
-              pathBuilder.slice(-2) !== '/*'
+              !pathEndsWithWildcard(pathBuilder)
             ) {
               return [(_stripBasename ? '' : basename) + newPath, 'route'];
             }
 
             // if the last character of the pathbuilder is a wildcard and there are children, remove the wildcard
-            if (pathEndsWithWildcard(pathBuilder, branch)) {
+            if (pathIsWildcardAndHasChildren(pathBuilder, branch)) {
               pathBuilder = pathBuilder.slice(0, -1);
             }
 
@@ -225,13 +254,14 @@ function updatePageloadTransaction(
   routes: RouteObject[],
   matches?: AgnosticDataRouteMatch,
   basename?: string,
+  allRoutes?: RouteObject[],
 ): void {
   const branches = Array.isArray(matches)
     ? matches
     : (_matchRoutes(routes, location, basename) as unknown as RouteMatch[]);
 
   if (branches) {
-    const [name, source] = getNormalizedName(routes, location, branches, basename);
+    const [name, source] = getNormalizedName(routes, location, branches, basename, allRoutes);
 
     getCurrentScope().setTransactionName(name);
 
@@ -248,6 +278,7 @@ function handleNavigation(
   navigationType: Action,
   matches?: AgnosticDataRouteMatch,
   basename?: string,
+  allRoutes?: RouteObject[],
 ): void {
   const branches = Array.isArray(matches) ? matches : _matchRoutes(routes, location, basename);
 
@@ -257,7 +288,7 @@ function handleNavigation(
   }
 
   if ((navigationType === 'PUSH' || navigationType === 'POP') && branches) {
-    const [name, source] = getNormalizedName(routes, location, branches, basename);
+    const [name, source] = getNormalizedName(routes, location, branches, basename, allRoutes);
 
     startBrowserTracingNavigationSpan(client, {
       name,
@@ -270,6 +301,20 @@ function handleNavigation(
   }
 }
 
+const getChildRoutesRecursively = (route: RouteObject): RouteObject[] => {
+  const routes: RouteObject[] = [];
+
+  if (route.children) {
+    route.children.forEach(child => {
+      routes.push(...getChildRoutesRecursively(child));
+    });
+  }
+
+  routes.push(route);
+
+  return routes;
+};
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function withSentryReactRouterV6Routing<P extends Record<string, any>, R extends React.FC<P>>(Routes: R): R {
   if (!_useEffect || !_useLocation || !_useNavigationType || !_createRoutesFromChildren || !_matchRoutes) {
@@ -281,6 +326,7 @@ export function withSentryReactRouterV6Routing<P extends Record<string, any>, R 
     return Routes;
   }
 
+  const allRoutes: RouteObject[] = [];
   let isMountRenderPass: boolean = true;
 
   const SentryRoutes: React.FC<P> = (props: P) => {
@@ -291,11 +337,15 @@ export function withSentryReactRouterV6Routing<P extends Record<string, any>, R 
       () => {
         const routes = _createRoutesFromChildren(props.children) as RouteObject[];
 
+        routes.forEach(route => {
+          allRoutes.push(...getChildRoutesRecursively(route));
+        });
+
         if (isMountRenderPass) {
-          updatePageloadTransaction(getActiveRootSpan(), location, routes);
+          updatePageloadTransaction(getActiveRootSpan(), location, routes, undefined, undefined, allRoutes);
           isMountRenderPass = false;
         } else {
-          handleNavigation(location, routes, navigationType);
+          handleNavigation(location, routes, navigationType, undefined, undefined, allRoutes);
         }
       },
       // `props.children` is purposely not included in the dependency array, because we do not want to re-run this effect
@@ -326,6 +376,7 @@ export function wrapUseRoutes(origUseRoutes: UseRoutes): UseRoutes {
   }
 
   let isMountRenderPass: boolean = true;
+  const allRoutes: RouteObject[] = [];
 
   const SentryRoutes: React.FC<{
     children?: React.ReactNode;
@@ -349,11 +400,15 @@ export function wrapUseRoutes(origUseRoutes: UseRoutes): UseRoutes {
       const normalizedLocation =
         typeof stableLocationParam === 'string' ? { pathname: stableLocationParam } : stableLocationParam;
 
+      routes.forEach(route => {
+        allRoutes.push(...getChildRoutesRecursively(route));
+      });
+
       if (isMountRenderPass) {
-        updatePageloadTransaction(getActiveRootSpan(), normalizedLocation, routes);
+        updatePageloadTransaction(getActiveRootSpan(), normalizedLocation, routes, undefined, undefined, allRoutes);
         isMountRenderPass = false;
       } else {
-        handleNavigation(normalizedLocation, routes, navigationType);
+        handleNavigation(normalizedLocation, routes, navigationType, undefined, undefined, allRoutes);
       }
     }, [navigationType, stableLocationParam]);
 
