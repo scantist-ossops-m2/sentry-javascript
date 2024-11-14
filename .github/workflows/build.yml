@@ -5,6 +5,7 @@ on:
       - develop
       - master
       - release/**
+      - fn/test-push
   pull_request:
   merge_group:
     types: [checks_requested]
