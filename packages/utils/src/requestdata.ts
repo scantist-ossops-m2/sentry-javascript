@@ -435,9 +435,29 @@ export function winterCGHeadersToDict(winterCGHeaders: WebFetchHeaders): Record<
 }
 
 /**
+ * Convert common request headers to a simple dictionary.
+ */
+export function headersToDict(reqHeaders: Record<string, string | string[] | undefined>): Record<string, string> {
+  const headers: Record<string, string> = Object.create(null);
+
+  try {
+    Object.entries(reqHeaders).forEach(([key, value]) => {
+      if (typeof value === 'string') {
+        headers[key] = value;
+      }
+    });
+  } catch (e) {
+    DEBUG_BUILD &&
+      logger.warn('Sentry failed extracting headers from a request object. If you see this, please file an issue.');
+  }
+
+  return headers;
+}
+
+/**
  * Converts a `Request` object that implements the `Web Fetch API` (https://developer.mozilla.org/en-US/docs/Web/API/Headers) into the format that the `RequestData` integration understands.
  */
-export function winterCGRequestToRequestData(req: WebFetchRequest): PolymorphicRequest {
+export function winterCGRequestToRequestData(req: WebFetchRequest): Request {
   const headers = winterCGHeadersToDict(req.headers);
   return {
     method: req.method,

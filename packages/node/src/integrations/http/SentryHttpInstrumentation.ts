@@ -10,6 +10,7 @@ import type { PolymorphicRequest, Request, SanitizedRequestData } from '@sentry/
 import {
   getBreadcrumbLogLevelFromHttpStatusCode,
   getSanitizedUrlString,
+  headersToDict,
   logger,
   parseUrl,
   stripUrlQueryAndFragment,
@@ -454,21 +455,4 @@ function extractQueryParams(req: IncomingMessage): string | undefined {
   } catch {
     return undefined;
   }
-}
-
-function headersToDict(reqHeaders: Record<string, string | string[] | undefined>): Record<string, string> {
-  const headers: Record<string, string> = Object.create(null);
-
-  try {
-    Object.entries(reqHeaders).forEach(([key, value]) => {
-      if (typeof value === 'string') {
-        headers[key] = value;
-      }
-    });
-  } catch (e) {
-    DEBUG_BUILD &&
-      logger.warn('Sentry failed extracting headers from a request object. If you see this, please file an issue.');
-  }
-
-  return headers;
 }

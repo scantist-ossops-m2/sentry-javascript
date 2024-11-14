@@ -9,7 +9,7 @@ import {
   startSpan,
   withIsolationScope,
 } from '@sentry/core';
-import type { IntegrationFn, SpanAttributes } from '@sentry/types';
+import type { IntegrationFn, Request, SpanAttributes } from '@sentry/types';
 import { getSanitizedUrlString, parseUrl } from '@sentry/utils';
 
 const INTEGRATION_NAME = 'BunServer';
@@ -76,11 +76,11 @@ function instrumentBunServeOptions(serveOptions: Parameters<typeof Bun.serve>[0]
         const url = getSanitizedUrlString(parsedUrl);
 
         isolationScope.setSDKProcessingMetadata({
-          request: {
+          normalizedRequest: {
             url,
             method: request.method,
             headers: request.headers.toJSON(),
-          },
+          } satisfies Request,
         });
 
         return continueTrace(

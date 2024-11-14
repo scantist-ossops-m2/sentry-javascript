@@ -111,7 +111,7 @@ async function instrumentRequest(
       getCurrentScope().setSDKProcessingMetadata({
         // We store the request on the current scope, not isolation scope,
         // because we may have multiple requests nested inside each other
-        request: isDynamicPageRequest ? winterCGRequestToRequestData(request) : { method, url: request.url },
+        normalizedRequest: isDynamicPageRequest ? winterCGRequestToRequestData(request) : { method, url: request.url },
       });
 
       if (options.trackClientIp && isDynamicPageRequest) {
